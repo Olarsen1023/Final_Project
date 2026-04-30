@@ -39,7 +39,7 @@ def load_conflicts(filename):
 
 def load_groups(filename):
     """Load groups that must sit together from CSV."""
-    groups = defaultdict(list)  # group_name -> [members]
+    groups = {}  # group_name -> [members]
     guest_to_group = {}  # guest -> group_name
     
     with open(filename, 'r') as f:
@@ -50,8 +50,16 @@ def load_groups(filename):
             if len(row) >= 2:
                 group_name = row[0].strip()
                 members = [m.strip() for m in row[1:] if m.strip()]
-                groups[group_name] = members
+                
+                # Handle duplicate group names by appending
+                if group_name in groups:
+                    groups[group_name].extend(members)
+                else:
+                    groups[group_name] = members
+                
                 for member in members:
+                    if member in guest_to_group:
+                        print(f"⚠️  WARNING: {member} is in multiple groups: {guest_to_group[member]} and {group_name}")
                     guest_to_group[member] = group_name
     
     return groups, guest_to_group
@@ -83,20 +91,29 @@ def assign_seats(guests, conflicts, groups, guest_to_group, num_tables, seats_pe
     
     table_assignments = {i: [] for i in range(num_tables)}
     unassigned = []
-    assigned_groups = set()
+    assigned_guests = set()
+    processed_groups = set()
     
     for guest in guests:
-        # Skip if already assigned as part of a group
-        if guest in assigned_groups:
+        # Skip if already assigned
+        if guest in assigned_guests:
             continue
         
-        # Determine if this is a group assignment
+        # Determine group members to assign
         if guest in guest_to_group:
             group_name = guest_to_group[guest]
+            # Skip if we already processed this group
+            if group_name in processed_groups:
+                continue
+            
             group_members = groups[group_name]
-            # Only process if not already assigned
-            unassigned_members = [m for m in group_members if m not in assigned_groups]
-            if not unassigned_members:
+            unassigned_members = [m for m in group_members if m not in assigned_guests and m in guests]
+            
+            # Check if group is too large
+            if len(unassigned_members) > seats_per_table:
+                print(f"⚠️  GROUP TOO LARGE: {group_name} has {len(unassigned_members)} members but table only has {seats_per_table} seats")
+                unassigned.extend(unassigned_members)
+                processed_groups.add(group_name)
                 continue
         else:
             unassigned_members = [guest]
@@ -123,12 +140,15 @@ def assign_seats(guests, conflicts, groups, guest_to_group, num_tables, seats_pe
             if can_place_all:
                 for member in unassigned_members:
                     table_assignments[table].append(member)
-                    assigned_groups.add(member)
+                    assigned_guests.add(member)
                 placed = True
+                processed_groups.add(group_name if guest in guest_to_group else None)
                 break
         
         if not placed:
-            unassigned.extend(unassigned_members)
+            for member in unassigned_members:
+                if member not in assigned_guests and member not in unassigned:
+                    unassigned.append(member)
     
     return table_assignments, unassigned
 
