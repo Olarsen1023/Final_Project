@@ -171,13 +171,28 @@ def print_seating_chart(table_assignments, num_tables, seats_per_table):
     print("\n" + "=" * 60)
 
 
+def export_to_csv(table_assignments, num_tables, seats_per_table, filename='data/seating_chart.csv'):
+    """Export seating chart to CSV."""
+    with open(filename, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Table', 'Seat', 'Guest'])
+        for i in range(num_tables):
+            table = table_assignments[i]
+            for j, guest in enumerate(table, 1):
+                writer.writerow([i+1, j, guest])
+            # Add empty seats
+            for j in range(len(table)+1, seats_per_table+1):
+                writer.writerow([i+1, j, 'Empty'])
+    print(f"\n✓ Exported seating chart to {filename}")
+
+
 def validate_no_conflicts(table_assignments, conflicts):
     """Validate that no conflicts are seated together."""
     violations = []
     for table, guests in table_assignments.items():
         for i, g1 in enumerate(guests):
             for g2 in guests[i+1:]:
-                if g2 in conflicts[g1]:
+                if g1 in conflicts and g2 in conflicts[g1]:
                     violations.append(f"Table {table+1}: {g1} and {g2} cannot sit together")
     return violations
 
@@ -200,6 +215,9 @@ def main():
     
     # Print results
     print_seating_chart(table_assignments, NUM_TABLES, SEATS_PER_TABLE)
+    
+    # Export to CSV
+    export_to_csv(table_assignments, NUM_TABLES, SEATS_PER_TABLE, 'data/seating_chart.csv')
     
     # Validate
     violations = validate_no_conflicts(table_assignments, conflicts)
