@@ -1,0 +1,5 @@
+# Format: Person1,Person2,Reason (optional)
+# One row per conflict pair - these people CANNOT sit at the same table
+# Example:
+# Gaven,Erik,Family feud
+# Laura,Bob,Exes
