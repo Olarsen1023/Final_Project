@@ -7,6 +7,7 @@ NUM_TABLES = 9
 SEATS_PER_TABLE = 8
 GUEST_FILE = 'data/Guest List for Final - Sheet1.csv'
 CONFLICT_FILE = 'data/conflicts.csv'
+GROUP_FILE = 'data/groups.csv'
 
 
 def load_guests(filename):
@@ -36,6 +37,34 @@ def load_conflicts(filename):
     return conflicts
 
 
+def load_groups(filename):
+    """Load groups that must sit together from CSV."""
+    groups = defaultdict(list)  # group_name -> [members]
+    guest_to_group = {}  # guest -> group_name
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if not row or row[0].startswith('#'):
+                continue
+            if len(row) >= 2:
+                group_name = row[0].strip()
+                members = [m.strip() for m in row[1:] if m.strip()]
+                groups[group_name] = members
+                for member in members:
+                    guest_to_group[member] = group_name
+    
+    return groups, guest_to_group
+
+
+def get_group_size(guest, guest_to_group):
+    """Get the size of the group this guest belongs to."""
+    if guest not in guest_to_group:
+        return 1
+    group_name = guest_to_group[guest]
+    return len(guest_to_group[guest]) if guest in guest_to_group else 1
+
+
 def can_place(guest, table, table_assignments, conflicts):
     """Check if guest can be placed at this table without conflicts."""
     for seated_guest in table_assignments[table]:
@@ -44,31 +73,62 @@ def can_place(guest, table, table_assignments, conflicts):
     return True
 
 
-def assign_seats(guests, conflicts, num_tables, seats_per_table):
+def assign_seats(guests, conflicts, groups, guest_to_group, num_tables, seats_per_table):
     """
-    Assign guests to tables using a greedy algorithm with conflict checking.
+    Assign guests to tables using a greedy algorithm with conflict and group checking.
+    Groups are assigned together - all members must fit at the same table.
     Shuffles guests randomly for better distribution.
     """
     random.shuffle(guests)
     
     table_assignments = {i: [] for i in range(num_tables)}
     unassigned = []
+    assigned_groups = set()
     
     for guest in guests:
+        # Skip if already assigned as part of a group
+        if guest in assigned_groups:
+            continue
+        
+        # Determine if this is a group assignment
+        if guest in guest_to_group:
+            group_name = guest_to_group[guest]
+            group_members = groups[group_name]
+            # Only process if not already assigned
+            unassigned_members = [m for m in group_members if m not in assigned_groups]
+            if not unassigned_members:
+                continue
+        else:
+            unassigned_members = [guest]
+        
         placed = False
         # Try each table in random order
         tables = list(range(num_tables))
         random.shuffle(tables)
         
         for table in tables:
-            if len(table_assignments[table]) < seats_per_table:
-                if can_place(guest, table, table_assignments, conflicts):
-                    table_assignments[table].append(guest)
-                    placed = True
+            current_seats = len(table_assignments[table])
+            required_seats = len(unassigned_members)
+            
+            if current_seats + required_seats > seats_per_table:
+                continue
+            
+            # Check if all members can be placed at this table
+            can_place_all = True
+            for member in unassigned_members:
+                if not can_place(member, table, table_assignments, conflicts):
+                    can_place_all = False
                     break
+            
+            if can_place_all:
+                for member in unassigned_members:
+                    table_assignments[table].append(member)
+                    assigned_groups.add(member)
+                placed = True
+                break
         
         if not placed:
-            unassigned.append(guest)
+            unassigned.extend(unassigned_members)
     
     return table_assignments, unassigned
 
@@ -109,8 +169,13 @@ def main():
     conflicts = load_conflicts(CONFLICT_FILE)
     print(f"Loaded {sum(len(v) for v in conflicts.values()) // 2} conflict pairs from {CONFLICT_FILE}")
     
+    groups, guest_to_group = load_groups(GROUP_FILE)
+    print(f"Loaded {len(groups)} groups from {GROUP_FILE}")
+    for name, members in groups.items():
+        print(f"  - {name}: {members}")
+    
     table_assignments, unassigned = assign_seats(
-        guests, conflicts, NUM_TABLES, SEATS_PER_TABLE
+        guests, conflicts, groups, guest_to_group, NUM_TABLES, SEATS_PER_TABLE
     )
     
     # Print results
