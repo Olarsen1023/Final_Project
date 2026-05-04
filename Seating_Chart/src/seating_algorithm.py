@@ -110,12 +110,6 @@ def load_groups(filename):
         tuple: (groups, guest_to_group)
             - groups: dict mapping group names to list of members
             - guest_to_group: dict mapping each guest to their group name
-        
-    Notes:
-        - Lines starting with '#' are treated as comments and skipped
-        - Each line should be: GroupName,Member1,Member2,...
-        - If a guest appears in multiple groups, a warning is printed
-        - If a group name appears multiple times, members are merged
     """
     groups = {}  # group_name -> [list of member names]
     guest_to_group = {}  # guest_name -> group_name
